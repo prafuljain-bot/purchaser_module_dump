@@ -416,9 +416,10 @@ function renderShare(){
   const C     = BLOCK_COLORS;
 
   function blockCell(d,b,showOverallPct=false){
-    const pct=d[b].pct,conf=d[b].confirmed,avail=d[b].available,trig=d[b].triggered;
+    if(!d||!d[b]) return `<td class="bcell"><span class="zero">—</span></td>`;
+    const pct=d[b].pct||0,conf=d[b].confirmed||0,avail=d[b].available||0,trig=d[b].triggered||0;
     const total=d.total||0;
-    const col=C[b];
+    const col=C[b]||'var(--muted)';
     if(trig===0&&conf===0) return `<td class="bcell"><span class="zero">—</span></td>`;
     const isCINear=b==='CI Near'||b==='CI Far';
     const fillRate=avail>0?Math.round(conf/avail*100):0;
@@ -452,8 +453,8 @@ function renderShare(){
   }
 
   function stackBar(d){
-    const segs=BLOCKS.filter(b=>d[b].pct>0).map(b=>
-      `<div class="sseg" style="width:${d[b].pct}%;background:${C[b]}"
+    const segs=BLOCKS.filter(b=>d[b]&&d[b].pct>0).map(b=>
+      `<div class="sseg" style="width:${d[b].pct}%;background:${C[b]||'#666'}"
         data-tip="${b}: ${d[b].pct}% · conf ${d[b].confirmed} / avail ${d[b].available}"></div>`
     ).join('');
     return `<td class="vcell"><div class="sbar">${segs}</div></td>`;
@@ -534,9 +535,9 @@ function renderBrand(){
   // Same blockCell logic as Share tab but % is of brand total
   function blockCell(d, bl, showOverallPct=false){
     if(!d||!d[bl]) return `<td class="bcell"><span class="zero">—</span></td>`;
-    const pct=d[bl].pct, conf=d[bl].confirmed, avail=d[bl].available, trig=d[bl].triggered;
+    const pct=d[bl].pct||0, conf=d[bl].confirmed||0, avail=d[bl].available||0, trig=d[bl].triggered||0;
     const total=d.total||0;
-    const col=BLOCK_C[bl];
+    const col=BLOCK_C[bl]||'var(--muted)';
     if(trig===0&&conf===0) return `<td class="bcell"><span class="zero">—</span></td>`;
     const isCINear = bl==='CI Near'||bl==='CI Far';
     const fillRate = avail>0?Math.round(conf/avail*100):0;
