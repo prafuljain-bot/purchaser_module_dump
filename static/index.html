@@ -207,7 +207,11 @@
     <div class="key-item"><span class="kb" style="color:#4ade80">67%</span>fill rate</div>
     <div class="key-item"><span class="kb" style="color:var(--rca-ci)">29%</span>trig overall</div>
   </div>
-  <div id="share-root"><div style="padding:60px;text-align:center;font-family:'DM Mono',monospace;color:var(--muted)">Loading...</div></div>
+  <div id="share-root"><div id="loading-msg" style="padding:60px;text-align:center;font-family:'DM Mono',monospace;">
+  <div style="color:var(--rca-ci);font-size:16px;margin-bottom:12px">Loading data...</div>
+  <div id="load-sub" style="color:var(--muted);font-size:11px">First load may take 30–60 seconds (server waking up)</div>
+  <div id="load-timer" style="color:var(--muted);font-size:10px;margin-top:8px"></div>
+</div></div>
 </div>
 
 <div id="tab-brand" class="tab-content">
@@ -1019,6 +1023,35 @@ function renderFurtherRca(){
 
 
 
+// Loading timer
+var _start = Date.now();
+var _timer = setInterval(function() {
+  var el = document.getElementById('load-timer');
+  if(el) el.textContent = Math.round((Date.now()-_start)/1000) + 's elapsed...';
+}, 1000);
+
+function loadData() {
+  fetch('/api/data')
+    .then(function(r) {
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function(data) {
+      clearInterval(_timer);
+      PAYLOAD   = data;
+      GROUP_MAP = data.groups || {};
+      var ts = new Date(data.data_ts * 1000);
+      document.getElementById('data-ts').textContent =
+        'updated ' + ts.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+      render();
+    })
+    .catch(function(e) {
+      clearInterval(_timer);
+      document.getElementById('share-root').innerHTML =
+        '<div style="padding:40px;text-align:center;color:#f87171;font-family:monospace">Failed: ' + e.message +
+        '<br><br><button onclick="location.reload()" style="padding:8px 20px;background:var(--rca-ci);color:#000;border:none;border-radius:6px;cursor:pointer;font-family:monospace">Retry</button></div>';
+    });
+}
 loadData();
 </script>
 </body>
