@@ -9,10 +9,11 @@ from datetime import datetime
 from functools import lru_cache
 
 import requests
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional
 from groq import Groq
 
 app = FastAPI()
@@ -23,7 +24,7 @@ DATA_URL    = os.environ.get("DATA_URL",
     "https://raw.githubusercontent.com/prafuljain-bot/purchaser_module_dump/main/data.csv")
 GROQ_KEY      = os.environ.get("GROQ_API_KEY", "")
 CACHE_TTL   = int(os.environ.get("CACHE_TTL", "300"))   # seconds
-MONTHS      = ['2026-03','2026-04','2026-05']
+DEFAULT_MONTHS = ['2026-03','2026-04','2026-05']
 CITIES      = ['Jaipur','Chandigarh']
 BRAND_PAL   = ['#4ade80','#60a5fa','#f87171','#f59e0b','#a78bfa',
                '#fb923c','#22d3ee','#818cf8','#34d399','#fbbf24','#64748b']
@@ -38,8 +39,7 @@ def fetch_rows():
     resp = requests.get(DATA_URL, timeout=30)
     resp.raise_for_status()
     reader = csv.DictReader(io.StringIO(resp.text))
-    rows = [r for r in reader
-            if r.get("part_received_at", "")[:7] in MONTHS]
+    rows = list(reader)  # fetch ALL rows; date filtering in compute_payload
     _cache["data"] = rows
     _cache["ts"]   = now
     return rows
@@ -151,10 +151,10 @@ def compute_block_group(grp_rows, overall_total):
                      "confirmed": conf, "available": avail, "triggered": trig}
     return result
 
-def compute_share(rows, groups):
+def compute_share(rows, groups, months=None):
     group_labels = [g[0] for g in groups]
     overall, by_batch = {}, {}
-    for m in MONTHS:
+    for m in (months or DEFAULT_MONTHS):
         mo = [r for r in rows if r.get("part_received_at","")[:7] == m]
         total = len(mo)
         overall[m] = compute_block_group(mo, total)
@@ -165,7 +165,7 @@ def compute_share(rows, groups):
     return {"overall": overall, "by_batch": by_batch}
 
 # ── Brand computation ─────────────────────────────────────────────────────────
-def compute_brand(rows, groups):
+def compute_brand(rows, groups, months=None):
     group_labels = [g[0] for g in groups]
     bc = Counter(r.get("requested_part_brand","") for r in rows if r.get("requested_part_brand"))
     top10  = [b for b,_ in bc.most_common(10)]
@@ -191,14 +191,14 @@ def compute_brand(rows, groups):
     by_brand = {}
     for brand in brands:
         by_brand[brand] = {}
-        for m in MONTHS:
+        for m in (months or DEFAULT_MONTHS):
             mo = [r for r in rows if r.get("part_received_at","")[:7] == m]
             br = [r for r in mo if brand_of(r) == brand]
             by_brand[brand][m] = block_for_brand(br, len(mo))
     return {"top10": top10, "brands": brands, "colors": colors, "blocks": BLOCKS, "by_brand": by_brand}
 
 # ── PIOM cascade ──────────────────────────────────────────────────────────────
-def compute_piom_cascade(rows, groups):
+def compute_piom_cascade(rows, groups, months=None):
     bc = Counter(r.get("requested_part_brand","") for r in rows if r.get("requested_part_brand"))
     top10  = [b for b,_ in bc.most_common(10)]
     brands = top10 + ["Other"]
@@ -217,7 +217,7 @@ def compute_piom_cascade(rows, groups):
                 "ci_near_pct": pct(cn), "ci_near_overall_pct": opct(cn),
                 "ci_far_pct":  pct(cf), "ci_far_overall_pct":  opct(cf)}
     result = {"overall": {}, "by_brand": {}, "brands": brands}
-    for m in MONTHS:
+    for m in (months or DEFAULT_MONTHS):
         mo_total = sum(1 for r in rows if r.get("part_received_at","")[:7] == m)
         mo_piom  = [r for r in rows if r.get("part_received_at","")[:7] == m
                     and r.get("block_type") == "PAN_INDIA_OPEN_MARKET"]
@@ -229,7 +229,7 @@ def compute_piom_cascade(rows, groups):
     return result
 
 # ── Further RCA ───────────────────────────────────────────────────────────────
-def compute_further_rca(rows, groups):
+def compute_further_rca(rows, groups, months=None):
     def block_of(r):
         bt = r.get("block_type",""); tc = r.get("transfer_order_city","")
         if bt == "PREFERRED_VENDOR": return "PV"
@@ -240,7 +240,7 @@ def compute_further_rca(rows, groups):
     def cities_of(r):
         return [c.strip() for c in r.get("total_cities","").split(",") if c.strip()]
     overall_ct = {}
-    for m in MONTHS:
+    for m in (months or DEFAULT_MONTHS):
         mo_conf = [r for r in rows if r.get("part_received_at","")[:7] == m and is_ci_near(r)]
         times = [h for r in mo_conf for h in [ci_hrs(r)] if h is not None]
         overall_ct[m] = med(times)
@@ -263,7 +263,7 @@ def compute_further_rca(rows, groups):
                            for b in spill_blocks}
         }
     result = {"ci_near": {}, "ci_far": {}}
-    for m in MONTHS:
+    for m in (months or DEFAULT_MONTHS):
         mo = [r for r in rows if r.get("part_received_at","")[:7] == m]
         mo_total = len(mo)
         ci_near_rej = [r for r in mo if is_bilaspur(r) and not is_ci_near(r)]
@@ -275,7 +275,7 @@ def compute_further_rca(rows, groups):
     return result
 
 # ── Summary stats for Claude context ─────────────────────────────────────────
-def build_context_summary(payload):
+def build_context_summary(payload, months=None):
     lines = ["=== PROCUREMENT ANALYTICS CONTEXT ===\n"]
     lines.append("Cities: Jaipur, Chandigarh | Period: Mar–May 2026 | JIT Non-Adhoc\n")
     lines.append("Cascade: CI Near → PV → LOM → CI Far (May+) → PIOM Near → PIOM Far\n")
@@ -286,11 +286,11 @@ def build_context_summary(payload):
         lines.append(f"--- {city} ---")
         grps  = payload["groups"].get(city, [])
         share = payload[city]["share"]
-        for m in MONTHS:
+        for m in (months or DEFAULT_MONTHS):
             ov = share["overall"].get(m, {})
             total = ov.get("total", 0)
             if not total: continue
-            mn = {"2026-03":"Mar","2026-04":"Apr","2026-05":"May"}[m]
+            mn = {"2026-01":"Jan","2026-02":"Feb","2026-03":"Mar","2026-04":"Apr","2026-05":"May","2026-06":"Jun","2026-07":"Jul","2026-08":"Aug","2026-09":"Sep","2026-10":"Oct","2026-11":"Nov","2026-12":"Dec"}.get(m, m)
             lines.append(f"\n{mn} ({total} parts):")
             for b in BLOCKS:
                 bd = ov.get(b, {})
@@ -303,25 +303,46 @@ def build_context_summary(payload):
     return "\n".join(lines)
 
 # ── Compute everything ────────────────────────────────────────────────────────
-def compute_payload():
-    rows = fetch_rows()
-    payload = {"groups": {}, "data_ts": time.time()}
+def compute_payload(start: str = None, end: str = None):
+    all_rows = fetch_rows()
+
+    # Filter by date range if provided
+    def in_range(r):
+        d = r.get("part_received_at", "")[:10]
+        if not d: return False
+        if start and d < start: return False
+        if end   and d > end:   return False
+        return True
+
+    rows = [r for r in all_rows if in_range(r)] if (start or end) else all_rows
+
+    # Detect months dynamically from filtered rows
+    months = sorted(set(r["part_received_at"][:7]
+                        for r in rows if r.get("part_received_at")))
+    if not months:
+        months = DEFAULT_MONTHS
+
+    payload = {"groups": {}, "months": months, "data_ts": time.time(),
+               "date_range": {"start": start or "", "end": end or ""}}
     for city in CITIES:
         cr   = [r for r in rows if r.get("entity_city") == city]
         grps = detect_groups(cr)
         payload[city] = {
-            "share":   compute_share(cr, grps),
-            "brand":   compute_brand(cr, grps),
-            "piom":    compute_piom_cascade(cr, grps),
-            "further": compute_further_rca(cr, grps),
+            "share":   compute_share(cr, grps, months),
+            "brand":   compute_brand(cr, grps, months),
+            "piom":    compute_piom_cascade(cr, grps, months),
+            "further": compute_further_rca(cr, grps, months),
         }
         payload["groups"][city] = [g[0] for g in grps]
-    payload["context"] = build_context_summary(payload)
+    payload["context"] = build_context_summary(payload, months)
     return payload
 
 _payload_cache = {"data": None, "ts": 0}
 
-def get_payload():
+def get_payload(start=None, end=None):
+    # If date range specified, always recompute (no cache)
+    if start or end:
+        return compute_payload(start, end)
     now = time.time()
     if _payload_cache["data"] is None or now - _payload_cache["ts"] > CACHE_TTL:
         _payload_cache["data"] = compute_payload()
@@ -330,8 +351,8 @@ def get_payload():
 
 # ── API Routes ────────────────────────────────────────────────────────────────
 @app.get("/api/data")
-def api_data():
-    return get_payload()
+def api_data(start: Optional[str] = Query(None), end: Optional[str] = Query(None)):
+    return get_payload(start, end)
 
 @app.get("/api/refresh")
 def api_refresh():
