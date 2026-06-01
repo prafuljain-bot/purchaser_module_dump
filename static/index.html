@@ -352,6 +352,10 @@ var MN_LONG = {'2026-01':'January','2026-02':'February','2026-03':'March',
 var BLK_C2  = {'PV':'#4ade80','CI Near':'#60a5fa','CI Far':'#a78bfa',
                'LOM':'#f59e0b','PIOM Near':'#f87171','PIOM Far':'#fb923c'};
 
+function drillClick(el) {
+  openDrill(el.dataset.city, el.dataset.month, el.dataset.block, el.dataset.group);
+}
+
 function openDrill(city, month, block, batchGroup) {
   var D    = PAYLOAD[city];
   var GRPS = GROUP_MAP[city];
@@ -614,14 +618,14 @@ function renderShare(){
         <td class="mcell">${MS[m]}<div class="mcell-total" style="opacity:.3">0 <span class="mcell-label">parts</span></div></td>
         <td colspan="${BLOCKS.length+1}" style="padding:10px 20px;font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);opacity:.35">No data</td>
       </tr>`;
-      var grpKey = byMonth._group || 'overall';
+      var grpKey = (d && d._group) || 'overall';
       return `<tr>
         <td class="mcell">${MS[m]}<div class="mcell-total">${d.total} <span class="mcell-label">parts</span></div></td>
         ${BLOCKS.map(b=>{
           var base = blockCell(d,b,showOverallPct);
           if(d[b]&&d[b].confirmed>0) {
-            base = base.replace('<td class="bcell">', 
-              '<td class="bcell" style="cursor:pointer;" onclick="openDrill(''+activeCity+'',''+m+'',''+b+'',''+grpKey+'')">');
+            base = base.replace('<td class="bcell">',
+              `<td class="bcell" style="cursor:pointer;" data-city="${activeCity}" data-month="${m}" data-block="${b}" data-group="${grpKey}" onclick="drillClick(this)">`);
           }
           return base;
         }).join('')}
