@@ -157,6 +157,7 @@
   .chat-msg.user{align-self:flex-end;background:var(--rca-ci);color:#000;border-radius:12px 12px 2px 12px;}
   .chat-msg.assistant{align-self:flex-start;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:12px 12px 12px 2px;}
   .chat-msg.loading{align-self:flex-start;background:var(--bg3);color:var(--muted);font-style:italic;border-radius:12px;padding:12px 16px;}
+  .chat-msg.assistant a{color:#000;}
   .chat-input-row{display:flex;gap:10px;padding:16px 0 0;border-top:1px solid var(--border);}
   .chat-input{flex:1;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:10px 16px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;}
   .chat-input:focus{border-color:var(--rca-ci);}
@@ -274,6 +275,8 @@
           <span class="chat-sug" onclick="askSug(this)">Chandigarh CI Near fill rate?</span>
           <span class="chat-sug" onclick="askSug(this)">Why did LOM fill rate drop in May?</span>
           <span class="chat-sug" onclick="askSug(this)">Explain the cascade flow</span>
+          <span class="chat-sug" onclick="askSug(this)">Download March data</span>
+          <span class="chat-sug" onclick="askSug(this)">Download CI Near data for Jaipur</span>
         </div>
       </div>
     </div>
@@ -505,11 +508,25 @@ function sendChat() {
     btn.disabled = false;
   });
 }
+function renderWithDownloads(text) {
+  // Convert [Download CSV](/api/download?...) to styled buttons
+  var escaped = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  escaped = escaped.replace(
+    /\[([^\]]*)\]\((\/api\/download[^)]*)\)/g,
+    '<a href="$2" download style="display:inline-block;margin-top:10px;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:#000;background:var(--rca-ci);border-radius:6px;padding:6px 14px;text-decoration:none;">📥 $1</a>'
+  );
+  return escaped.replace(/\n/g,'<br>');
+}
+
 function appendMsg(role, text) {
   var msgs = document.getElementById('chat-messages');
   var div  = document.createElement('div');
   div.className = 'chat-msg ' + role;
-  div.textContent = text;
+  if(role === 'assistant') {
+    div.innerHTML = renderWithDownloads(text);
+  } else {
+    div.textContent = text;
+  }
   msgs.appendChild(div);
   msgs.scrollTop = msgs.scrollHeight;
   return div;
@@ -638,8 +655,17 @@ function renderShare(){
       ${BLOCKS.map(b=>deltaCell(mar,may,b)).join('')}
       <td class="vcell"></td>
     </tr>`;
+    var dlStart = document.getElementById('date-start')?.value||'';
+    var dlEnd   = document.getElementById('date-end')?.value||'';
+    var dlUrl   = '/api/download?city='+encodeURIComponent(activeCity)+'&start='+dlStart+'&end='+dlEnd;
     return `<div class="tbl-wrap">
-      <div class="grp-head"><span class="grp-title">${title}</span><span class="grp-sub">${sub}</span></div>
+      <div class="grp-head">
+        <span class="grp-title">${title}</span>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span class="grp-sub">${sub}</span>
+          <a href="${dlUrl}" download style="font-family:'DM Mono',monospace;font-size:10px;color:var(--rca-ci);background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.3);border-radius:5px;padding:3px 10px;text-decoration:none;cursor:pointer;">📥 CSV</a>
+        </div>
+      </div>
       <table><thead><tr>
         <th style="text-align:left">Month</th>
         ${BLOCKS.map(b=>`<th style="color:${C[b]}">${b}</th>`).join('')}

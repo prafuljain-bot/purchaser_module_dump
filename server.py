@@ -354,6 +354,38 @@ def get_payload(start=None, end=None):
 def api_data(start: Optional[str] = Query(None), end: Optional[str] = Query(None)):
     return get_payload(start, end)
 
+@app.get("/api/download")
+def api_download(
+    city:        Optional[str] = Query("Jaipur"),
+    start:       Optional[str] = Query(None),
+    end:         Optional[str] = Query(None),
+    block:       Optional[str] = Query(None),
+    batch_group: Optional[str] = Query(None),
+):
+    from fastapi.responses import StreamingResponse
+    rows = fetch_rows()
+    f = [r for r in rows if r.get("entity_city","") == city]
+    if start: f = [r for r in f if r.get("part_received_at","")[:10] >= start]
+    if end:   f = [r for r in f if r.get("part_received_at","")[:10] <= end]
+    if block:
+        f = [r for r in f if block_label(r) == block]
+    if batch_group and batch_group != "overall":
+        grps = detect_groups(f)
+        f = [r for r in f if assign_group(r.get("batch_created_at",""), grps) == batch_group]
+    out = io.StringIO()
+    if f:
+        writer = csv.DictWriter(out, fieldnames=list(f[0].keys()))
+        writer.writeheader()
+        writer.writerows(f)
+    parts = [city, start or "all", end or "all"]
+    if block: parts.append(block.replace(" ","_"))
+    fname = "_".join(parts) + ".csv"
+    return StreamingResponse(
+        io.BytesIO(out.getvalue().encode()),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'}
+    )
+
 @app.get("/api/refresh")
 def api_refresh():
     _cache["data"] = None
@@ -386,6 +418,16 @@ Key rules:
 - Batch timing matters: earlier batches (8-9AM) had better CI Near rates because PV vendors inactive before 10AM.
 - April had low PIOM because Mahindra volume dropped and Ford vendor mapping improved.
 - May PIOM grew because LOM fill rate collapsed (82%→55%) and volume surged (Hyundai/Honda/Tata).
+
+DOWNLOAD INSTRUCTIONS:
+When the user asks to download, export, or get raw data, respond with your explanation AND include
+a download link in this EXACT format on its own line (replace values appropriately):
+[Download CSV](/api/download?city=CITY&start=START&end=END)
+Examples:
+- "download March data" → [Download CSV](/api/download?city={req.city}&start=2026-03-01&end=2026-03-31)
+- "download CI Near data" → [Download CSV](/api/download?city={req.city}&start=2026-03-01&end=2026-05-31&block=CI+Near)
+- "download all Chandigarh data" → [Download CSV](/api/download?city=Chandigarh&start=2026-03-01&end=2026-05-31)
+Use the current city ({req.city}) unless user specifies another city.
 """
     client = Groq(api_key=GROQ_KEY)
     resp   = client.chat.completions.create(
