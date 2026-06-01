@@ -509,11 +509,15 @@ function sendChat() {
   });
 }
 function renderWithDownloads(text) {
-  // Convert [Download CSV](/api/download?...) to styled buttons
   var escaped = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  var dlStyle = [
+    'display:inline-block','margin-top:10px','font-size:11px','font-weight:700',
+    'color:#000','background:var(--rca-ci)','border-radius:6px',
+    'padding:6px 14px','text-decoration:none'
+  ].join(';');
   escaped = escaped.replace(
     /\[([^\]]*)\]\((\/api\/download[^)]*)\)/g,
-    '<a href="$2" download style="display:inline-block;margin-top:10px;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;color:#000;background:var(--rca-ci);border-radius:6px;padding:6px 14px;text-decoration:none;">📥 $1</a>'
+    '<a href="$2" download style="' + dlStyle + '">📥 $1</a>'
   );
   return escaped.replace(/\n/g,'<br>');
 }
