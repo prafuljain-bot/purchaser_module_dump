@@ -272,14 +272,10 @@ window.addEventListener('unhandledrejection', function(e) {
   bar.textContent = 'Promise error: ' + e.reason;
 });
 
-// ── Globals ──
+// ── Globals — declared in rendering engine below (MONTHS, MS, BLOCKS, activeCity etc.) ──
+// Declare only what's NOT in rendering engine
 var PAYLOAD    = null;
 var GROUP_MAP  = {};
-var activeCity = 'Jaipur';
-var activeTab  = 'share';
-var chatHistory = [];
-
-// MONTHS, MS, BLOCK_COLORS, BLOCKS defined in rendering engine below
 
 // ── Load data ──
 function loadData() {
@@ -302,32 +298,7 @@ function loadData() {
     });
 }
 
-// ── Navigation ──
-function switchTab(name, btn) {
-  document.querySelectorAll('.tab-content').forEach(function(el) { el.classList.remove('active'); });
-  document.querySelectorAll('.tab-btn').forEach(function(el) { el.classList.remove('active'); });
-  document.getElementById('tab-'+name).classList.add('active');
-  btn.classList.add('active');
-  activeTab = name;
-  if(PAYLOAD && name !== 'chat') render();
-}
-function switchCity(city, btn) {
-  document.querySelectorAll('.city-btn').forEach(function(el) { el.classList.remove('active'); });
-  btn.classList.add('active');
-  activeCity = city;
-  if(PAYLOAD && activeTab !== 'chat') render();
-}
-function render() {
-  if(!PAYLOAD) return;
-  try {
-    if(activeTab==='share')        renderShare();
-    else if(activeTab==='brand')   renderBrand();
-    else if(activeTab==='further') renderFurtherRca();
-  } catch(e) {
-    document.getElementById(activeTab+'-root').innerHTML =
-      '<div style="padding:40px;text-align:center;color:#f87171;font-family:monospace">Render error: '+e.message+'<br><small>'+e.stack+'</small></div>';
-  }
-}
+// ── Navigation + render defined in rendering engine below ──
 
 // ── Chat ──
 function askSug(el) {
