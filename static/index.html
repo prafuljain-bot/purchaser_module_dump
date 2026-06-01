@@ -156,7 +156,7 @@
   .chat-msg{max-width:80%;padding:12px 16px;border-radius:12px;font-family:'DM Sans',sans-serif;font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-word;}
   .chat-msg.user{align-self:flex-end;background:var(--rca-ci);color:#000;border-radius:12px 12px 2px 12px;}
   .chat-msg.assistant{align-self:flex-start;background:var(--bg2);color:var(--text);border:1px solid var(--border);border-radius:12px 12px 12px 2px;}
-  .chat-msg.loading{align-self:flex-start;background:var(--bg3);color:var(--muted);font-style:italic;border-radius:12px;}
+  .chat-msg.loading{align-self:flex-start;background:var(--bg3);color:var(--muted);font-style:italic;border-radius:12px;padding:12px 16px;}
   .chat-input-row{display:flex;gap:10px;padding:16px 0 0;border-top:1px solid var(--border);}
   .chat-input{flex:1;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:10px 16px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;outline:none;}
   .chat-input:focus{border-color:var(--rca-ci);}
@@ -168,12 +168,12 @@
   .chat-suggestions{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:600px;}
   .chat-sug{padding:7px 14px;border:1px solid var(--border2);border-radius:20px;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);cursor:pointer;transition:all .15s;}
   .chat-sug:hover{border-color:var(--rca-ci);color:var(--rca-ci);}
-  .pulsedot{display:inline-block;animation:pulse 1s infinite;}.pulsedot:nth-child(2){animation-delay:.2s;}.pulsedot:nth-child(3){animation-delay:.4s;}
-  @keyframes pulse{0%,80%,100%{opacity:.2}40%{opacity:1}}
+  #err-bar{display:none;background:#f87171;color:#000;font-family:'DM Mono',monospace;font-size:11px;padding:8px 36px;}
 </style>
 </head>
 <body>
 
+<div id="err-bar"></div>
 <div class="tab-bar">
   <div class="tab-logo">Analytics <span>·</span> JIT</div>
   <button class="tab-btn active" onclick="switchTab('share',this)">Share by Batch</button>
@@ -189,7 +189,6 @@
   <button class="city-btn"        onclick="switchCity('Chandigarh',this)">Chandigarh</button>
 </div>
 
-<!-- Tab 1 -->
 <div id="tab-share" class="tab-content active">
   <h1>Share % <span class="share-accent">by batch group</span></h1>
   <div class="meta" id="share-meta"></div>
@@ -208,10 +207,9 @@
     <div class="key-item"><span class="kb" style="color:#4ade80">67%</span>fill rate</div>
     <div class="key-item"><span class="kb" style="color:var(--rca-ci)">29%</span>trig overall</div>
   </div>
-  <div id="share-root"><div style="padding:60px;text-align:center;font-family:'DM Mono',monospace;color:var(--muted)">Loading data...</div></div>
+  <div id="share-root"><div style="padding:60px;text-align:center;font-family:'DM Mono',monospace;color:var(--muted)">Loading...</div></div>
 </div>
 
-<!-- Tab 2 -->
 <div id="tab-brand" class="tab-content">
   <h1>Brand Mix <span class="share-accent">by brand</span></h1>
   <div class="meta" id="brand-meta"></div>
@@ -221,17 +219,15 @@
     <div class="key-item"><span class="kb" style="color:#4ade80">52%</span>% of brand</div>
     <div class="key-item"><span class="kb" style="color:var(--rca-ci)">3.2%</span>% overall</div>
   </div>
-  <div id="brand-root"><div style="padding:60px;text-align:center;font-family:'DM Mono',monospace;color:var(--muted)">Loading data...</div></div>
+  <div id="brand-root"><div style="padding:60px;text-align:center;font-family:'DM Mono',monospace;color:var(--muted)">Loading...</div></div>
 </div>
 
-<!-- Tab 3 -->
 <div id="tab-further" class="tab-content">
   <h1>Further <span>RCA</span></h1>
   <div class="meta" id="further-meta"></div>
-  <div id="further-root"><div style="padding:60px;text-align:center;font-family:'DM Mono',monospace;color:var(--muted)">Loading data...</div></div>
+  <div id="further-root"><div style="padding:60px;text-align:center;font-family:'DM Mono',monospace;color:var(--muted)">Loading...</div></div>
 </div>
 
-<!-- Tab 4: Chat -->
 <div id="tab-chat" class="tab-content">
   <h1>Ask <span>AI</span></h1>
   <div class="meta">Ask anything about the procurement data — numbers, trends, root causes</div>
@@ -251,8 +247,7 @@
       </div>
     </div>
     <div class="chat-input-row">
-      <input class="chat-input" id="chat-input"
-             placeholder="Ask anything about the data..."
+      <input class="chat-input" id="chat-input" placeholder="Ask anything..."
              onkeydown="if(event.key==='Enter'){event.preventDefault();sendChat();}">
       <button class="chat-send" id="chat-send" onclick="sendChat()">Send</button>
     </div>
@@ -260,101 +255,118 @@
 </div>
 
 <script>
-// ── Globals ───────────────────────────────────────────────────────────────────
-let PAYLOAD    = null;
-let GROUP_MAP  = {};
-let activeCity = 'Jaipur';
-let activeTab  = 'share';
-let chatHistory = [];
+// Global error handler — shows any JS error visibly
+window.onerror = function(msg, src, line, col, err) {
+  var bar = document.getElementById('err-bar');
+  bar.style.display = 'block';
+  bar.textContent = 'JS Error: ' + msg + ' (line ' + line + ')';
+  return false;
+};
+window.addEventListener('unhandledrejection', function(e) {
+  var bar = document.getElementById('err-bar');
+  bar.style.display = 'block';
+  bar.textContent = 'Promise error: ' + e.reason;
+});
 
-const MONTHS = ['2026-03','2026-04','2026-05'];
-const MS = {'2026-03':'Mar','2026-04':'Apr','2026-05':'May'};
-const BLOCK_COLORS = {'PV':'#4ade80','CI Near':'#60a5fa','CI Far':'#a78bfa',
-                       'LOM':'#f59e0b','PIOM Near':'#f87171','PIOM Far':'#fb923c'};
-const BLOCKS = ['PV','CI Near','CI Far','LOM','PIOM Near','PIOM Far'];
+// ── Globals ──
+var PAYLOAD    = null;
+var GROUP_MAP  = {};
+var activeCity = 'Jaipur';
+var activeTab  = 'share';
+var chatHistory = [];
 
-// ── Data loading ──────────────────────────────────────────────────────────────
-async function loadData() {
-  try {
-    const r = await fetch('/api/data');
-    if(!r.ok) throw new Error('HTTP ' + r.status);
-    PAYLOAD   = await r.json();
-    GROUP_MAP = PAYLOAD.groups || {};
-    const ts  = new Date(PAYLOAD.data_ts * 1000);
-    document.getElementById('data-ts').textContent =
-      'updated ' + ts.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-    render();
-  } catch(e) {
-    document.getElementById('share-root').innerHTML =
-      `<div style="padding:40px;text-align:center;font-family:'DM Mono',monospace;color:#f87171">
-        Failed to load data: ${e.message}<br>
-        <button onclick="loadData()" style="margin-top:12px;padding:8px 16px;background:var(--rca-ci);color:#000;border:none;border-radius:6px;cursor:pointer;font-family:'DM Mono',monospace;">Retry</button>
-      </div>`;
-  }
+var MONTHS = ['2026-03','2026-04','2026-05'];
+var MS = {'2026-03':'Mar','2026-04':'Apr','2026-05':'May'};
+var BLOCK_COLORS = {'PV':'#4ade80','CI Near':'#60a5fa','CI Far':'#a78bfa','LOM':'#f59e0b','PIOM Near':'#f87171','PIOM Far':'#fb923c'};
+var BLOCKS = ['PV','CI Near','CI Far','LOM','PIOM Near','PIOM Far'];
+
+// ── Load data ──
+function loadData() {
+  fetch('/api/data')
+    .then(function(r) {
+      if(!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function(data) {
+      PAYLOAD   = data;
+      GROUP_MAP = data.groups || {};
+      var ts = new Date(data.data_ts * 1000);
+      document.getElementById('data-ts').textContent =
+        'updated ' + ts.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+      render();
+    })
+    .catch(function(e) {
+      document.getElementById('share-root').innerHTML =
+        '<div style="padding:40px;text-align:center;color:#f87171;font-family:monospace">Failed: ' + e.message + '</div>';
+    });
 }
 
-// ── Navigation ────────────────────────────────────────────────────────────────
+// ── Navigation ──
 function switchTab(name, btn) {
-  document.querySelectorAll('.tab-content').forEach(el=>el.classList.remove('active'));
-  document.querySelectorAll('.tab-btn').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(function(el) { el.classList.remove('active'); });
+  document.querySelectorAll('.tab-btn').forEach(function(el) { el.classList.remove('active'); });
   document.getElementById('tab-'+name).classList.add('active');
   btn.classList.add('active');
   activeTab = name;
   if(PAYLOAD && name !== 'chat') render();
 }
 function switchCity(city, btn) {
-  document.querySelectorAll('.city-btn').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.city-btn').forEach(function(el) { el.classList.remove('active'); });
   btn.classList.add('active');
   activeCity = city;
   if(PAYLOAD && activeTab !== 'chat') render();
 }
 function render() {
   if(!PAYLOAD) return;
-  if(activeTab==='share')        renderShare();
-  else if(activeTab==='brand')   renderBrand();
-  else if(activeTab==='further') renderFurtherRca();
+  try {
+    if(activeTab==='share')        renderShare();
+    else if(activeTab==='brand')   renderBrand();
+    else if(activeTab==='further') renderFurtherRca();
+  } catch(e) {
+    document.getElementById(activeTab+'-root').innerHTML =
+      '<div style="padding:40px;text-align:center;color:#f87171;font-family:monospace">Render error: '+e.message+'<br><small>'+e.stack+'</small></div>';
+  }
 }
 
-// ── Chat ──────────────────────────────────────────────────────────────────────
+// ── Chat ──
 function askSug(el) {
   document.getElementById('chat-input').value = el.textContent;
   sendChat();
 }
-async function sendChat() {
-  const inp = document.getElementById('chat-input');
-  const msg = inp.value.trim();
+function sendChat() {
+  var inp = document.getElementById('chat-input');
+  var msg = inp.value.trim();
   if(!msg) return;
   inp.value = '';
-  const empty = document.getElementById('chat-empty');
+  var empty = document.getElementById('chat-empty');
   if(empty) empty.remove();
   chatHistory.push({role:'user', content:msg});
   appendMsg('user', msg);
-  const btn = document.getElementById('chat-send');
+  var btn = document.getElementById('chat-send');
   btn.disabled = true;
-  const loadEl = appendMsg('loading',
-    '<span class="pulsedot">●</span><span class="pulsedot">●</span><span class="pulsedot">●</span>');
-  loadEl.innerHTML = loadEl.textContent; // allow html for dots
-  loadEl.innerHTML = '<span class="pulsedot">●</span><span class="pulsedot">●</span><span class="pulsedot">●</span>';
-  try {
-    const r = await fetch('/api/chat', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({messages:chatHistory, city:activeCity})
-    });
-    const data = await r.json();
-    const ans = data.response || data.detail || 'Sorry, something went wrong.';
+  var loadEl = appendMsg('loading', '● ● ●');
+  fetch('/api/chat', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({messages:chatHistory, city:activeCity})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
     loadEl.remove();
+    var ans = data.response || data.detail || 'Error';
     appendMsg('assistant', ans);
     chatHistory.push({role:'assistant', content:ans});
-  } catch(e) {
+    btn.disabled = false;
+  })
+  .catch(function(e) {
     loadEl.remove();
     appendMsg('assistant', 'Error: ' + e.message);
-  }
-  btn.disabled = false;
+    btn.disabled = false;
+  });
 }
 function appendMsg(role, text) {
-  const msgs = document.getElementById('chat-messages');
-  const div  = document.createElement('div');
+  var msgs = document.getElementById('chat-messages');
+  var div  = document.createElement('div');
   div.className = 'chat-msg ' + role;
   div.textContent = text;
   msgs.appendChild(div);
@@ -362,7 +374,7 @@ function appendMsg(role, text) {
   return div;
 }
 
-// ── Rendering (from analytics engine) ────────────────────────────────────────
+// ── Rendering engine ──
 
 const MONTHS=['2026-03','2026-04','2026-05'];
 const MS={'2026-03':'Mar','2026-04':'Apr','2026-05':'May'};
@@ -1007,7 +1019,6 @@ function renderFurtherRca(){
 
 
 
-// Boot
 loadData();
 </script>
 </body>
