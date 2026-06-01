@@ -13,7 +13,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import anthropic
+from groq import Groq
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -21,7 +21,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 # ── Config ────────────────────────────────────────────────────────────────────
 DATA_URL    = os.environ.get("DATA_URL",
     "https://raw.githubusercontent.com/prafuljain-bot/purchaser_module_dump/main/data.csv")
-ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
+GROQ_KEY      = os.environ.get("GROQ_API_KEY", "")
 CACHE_TTL   = int(os.environ.get("CACHE_TTL", "300"))   # seconds
 MONTHS      = ['2026-03','2026-04','2026-05']
 CITIES      = ['Jaipur','Chandigarh']
@@ -345,13 +345,13 @@ class ChatRequest(BaseModel):
 
 @app.post("/api/chat")
 def api_chat(req: ChatRequest):
-    if not ANTHROPIC_KEY:
-        raise HTTPException(500, "ANTHROPIC_API_KEY not set")
+    if not GROQ_KEY:
+        raise HTTPException(500, "GROQ_API_KEY not set")
     payload = get_payload()
     context = payload.get("context", "")
     system  = f"""You are an expert procurement analytics assistant for a spare parts procurement system.
-You have deep knowledge of the data and business logic. Answer questions clearly and concisely.
-Use numbers from the context when available. Be specific — cite actual percentages and counts.
+Answer questions clearly and concisely. Use numbers from the context when available.
+Be specific — cite actual percentages and counts.
 
 {context}
 
@@ -366,14 +366,13 @@ Key rules:
 - April had low PIOM because Mahindra volume dropped and Ford vendor mapping improved.
 - May PIOM grew because LOM fill rate collapsed (82%→55%) and volume surged (Hyundai/Honda/Tata).
 """
-    client = anthropic.Anthropic(api_key=ANTHROPIC_KEY)
-    resp   = client.messages.create(
-        model="claude-opus-4-5",
+    client = Groq(api_key=GROQ_KEY)
+    resp   = client.chat.completions.create(
+        model="llama-3.1-8b-instant",
         max_tokens=1024,
-        system=system,
-        messages=req.messages
+        messages=[{"role": "system", "content": system}] + req.messages
     )
-    return {"response": resp.content[0].text}
+    return {"response": resp.choices[0].message.content}
 
 # ── Serve static HTML ─────────────────────────────────────────────────────────
 app.mount("/", StaticFiles(directory="static", html=True), name="static")
