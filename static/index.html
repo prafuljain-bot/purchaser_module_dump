@@ -272,10 +272,10 @@ window.addEventListener('unhandledrejection', function(e) {
   bar.textContent = 'Promise error: ' + e.reason;
 });
 
-// ── Globals — declared in rendering engine below (MONTHS, MS, BLOCKS, activeCity etc.) ──
-// Declare only what's NOT in rendering engine
-var PAYLOAD    = null;
-var GROUP_MAP  = {};
+// ── Globals — activeCity/activeTab/MONTHS/BLOCKS declared in rendering engine below ──
+var PAYLOAD     = null;
+var GROUP_MAP   = {};
+var chatHistory = [];
 
 // ── Load data ──
 function loadData() {
