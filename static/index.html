@@ -181,7 +181,15 @@
   <button class="tab-btn"        onclick="switchTab('brand',this)">Brand Mix</button>
   <button class="tab-btn"        onclick="switchTab('further',this)">Further RCA</button>
   <button class="tab-btn"        onclick="switchTab('chat',this)">✦ Ask AI</button>
-  <span id="data-ts" style="margin-left:auto;font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);padding:0 16px;align-self:center;"></span>
+  <div style="margin-left:auto;display:flex;align-items:center;gap:12px;padding:0 16px;">
+    <span id="data-ts" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);"></span>
+    <a id="dl-btn" href="/api/download?city=Jaipur&start=2026-03-01&end=2026-05-31" download
+       style="font-family:'DM Mono',monospace;font-size:10px;font-weight:700;color:var(--rca-ci);
+              background:rgba(34,211,238,.1);border:1px solid rgba(34,211,238,.3);
+              border-radius:5px;padding:4px 12px;text-decoration:none;white-space:nowrap;">
+      📥 Download
+    </a>
+  </div>
 </div>
 
 <div class="city-bar">
@@ -341,9 +349,17 @@ function loadData(start, end) {
 
 
 // ── Date range ────────────────────────────────────────────────────────────────
+function updateDlBtn() {
+  var start = document.getElementById('date-start')?.value || '';
+  var end   = document.getElementById('date-end')?.value   || '';
+  var btn   = document.getElementById('dl-btn');
+  if(btn) btn.href = '/api/download?city='+encodeURIComponent(activeCity)+'&start='+start+'&end='+end;
+}
+
 function applyDateRange() {
   var start = document.getElementById('date-start').value;
   var end   = document.getElementById('date-end').value;
+  updateDlBtn();
   loadData(start, end);
 }
 
@@ -559,6 +575,7 @@ function switchCity(city,btn){
   document.querySelectorAll('.city-btn').forEach(el=>el.classList.remove('active'));
   btn.classList.add('active');
   activeCity = city;
+  updateDlBtn();
   render();
 }
 function render(){
